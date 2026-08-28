@@ -1,281 +1,460 @@
 # Internal Marking System
 
-A data pipeline + dashboard project built using FastAPI and Streamlit.
+A production-style academic data platform for uploading, validating, processing, storing, and analyzing student internal marks through an end-to-end ETL workflow.
 
-## 👨‍💻 Author
-**Saurabh Tiwari**
+The application combines a **FastAPI backend** for data ingestion and processing with a **Streamlit dashboard** for interactive analysis and reporting.
 
-The **Internal Marking System** is a data processing and analytics application designed to clean, validate, and analyze student marks efficiently.
+## Overview
 
-It allows users to upload raw internal marks in CSV format, automatically performs data validation and cleaning through an ETL pipeline, and presents meaningful insights via an interactive dashboard.
+The Internal Marking System is designed to solve a common academic data-management problem: internal marks often arrive in inconsistent files and need to be validated, cleaned, processed, stored, and analyzed before they can be used reliably.
 
----
+This project provides a complete workflow:
 
-## 🚀 Key Features
+**Upload → Validate → Transform → Store → Analyze → Visualize**
 
-- **CSV Upload**
-  - Upload raw student marks (`raw_marks.csv`) directly from the dashboard
+It is built with a strong focus on data quality, traceability, and practical analytics.
 
--  **ETL Pipeline**
-  - Extracts, transforms, and loads data into a structured database (SQLite locally, PostgreSQL when deployed)
-  - Ensures data consistency and formatting
+## Key Features
 
--  **Data Cleaning & Validation**
-  - Detects and handles:
-    - Missing student names
-    - Non-numeric scores
-    - Out-of-range values (e.g., >100)
-    - Invalid/future exam dates
-  - Invalid entries are moved to a **quarantine log**
+- Upload student internal-mark datasets through the application.
+- Validate input schemas and required columns.
+- Validate:
+  - Student IDs
+  - Marks and score ranges
+  - Dates
+  - Duplicate records
+  - Missing/invalid values
+- Quarantine invalid records instead of silently dropping them.
+- Maintain detailed validation/error information for rejected records.
+- Execute a Pandas-based ETL pipeline for data cleaning and transformation.
+- Persist validated data into a relational database.
+- Maintain ETL run information for traceability and lineage.
+- Expose backend functionality through REST APIs using FastAPI.
+- Provide an interactive Streamlit dashboard for data exploration and analysis.
+- Generate summary statistics and academic performance insights.
+- Support a production-style separation between ingestion, processing, storage, API, and visualization layers.
 
--  **Interactive Dashboard (Streamlit)**
-  - **Filtered Performance** section — KPI cards, subject analytics, grade distribution, score trend, and top students, all driven by the subject/exam-date filters
-  - **Data Quality & Pipeline Monitoring** section — quarantine breakdown and ETL run history, always shown for the full pipeline history regardless of filters
-  - Student performance search — look up a student_id for their average, high/low, per-subject breakdown, and score trend
+## Architecture
 
--  **Error Tracking**
-  - Detailed breakdown of validation errors
-  - Transparent data quality monitoring
-  - Duplicate detection — a repeated (student_id, subject, exam_date) in the same upload is quarantined, not silently overwritten
-  - student_id format validation (required, 2-20 letters/digits/-/_)
-
--  **Export Clean Data**
-  - Separate downloads for clean marks, subject report, and quarantine report — each button downloads exactly what it says
-
--  **Security**
-  - Every endpoint except `GET /health` requires an `X-API-Key` header
-  - `ENVIRONMENT=production` fails the API at startup if `ETL_API_KEY` was left at its default, instead of silently running with a known secret
-  - Uploaded CSVs are capped at `MAX_UPLOAD_MB` (10 MB default) and rejected before being fully read into memory
-  - CORS restricted to a configured origin list (not `*`) — protects future browser-based clients; the Streamlit dashboard itself talks to the API server-side, so the `X-API-Key` check (not CORS) is what protects that connection today
-
--  **Data lineage / versioning**
-  - Marks are unique per `(run_id, student_id, subject, exam_date)`, not just `(student_id, subject, exam_date)` — every ETL run's rows are kept rather than a new upload silently overwriting the last
-  - `GET /analytics` and `GET /records` read from the latest **completed** run only, so historical runs never get mixed into the current view
-  - `GET /etl-runs` and the quarantine log still show the full history across every run
-
--  **Tests**
-  - 23 automated tests covering:
-    - row validation
-    - schema validation
-    - duplicate detection
-    - quarantine handling
-    - ETL loading
-    - ETL run tracking
-
----
-
-##  How It Works
-
-1. Upload a raw CSV file containing student marks  
-2. Run the ETL pipeline  
-3. System validates and cleans the data  
-4. Errors are quarantined and reported  
-5. Clean data is stored and visualized  
-6. Export the final processed dataset  
-
----
-
-##  Tech Stack
-
-- **Backend:** FastAPI  
-- **Frontend:** Streamlit  
-- **Database:** SQLite locally, PostgreSQL when deployed (see below)
-- **Language:** Python  
-
-> **SQLite vs. PostgreSQL** — Locally, with no further setup, the app uses a
-> SQLite file (`marking.db`) — zero external services needed. Set the
-> `DATABASE_URL` environment variable to a PostgreSQL connection string
-> (this project uses Supabase's, but any Postgres provider's works) and the
-> API automatically switches to it instead — same code, same endpoints,
-> nothing else in the design changes. See `db.py` for how this works, and
-> **Deploying** below for the concrete steps.
-
-> **Synchronous ETL** — `POST /trigger-etl` runs the pipeline inline and returns the result, which is appropriate for the project's expected file sizes (a few MB, seconds to process). For much larger files this would move to background job processing with a task queue instead of blocking the HTTP request.
-
-> **Rate limiting** — the in-memory limiter (5 calls/60s per IP) works correctly for a single API process. If this were ever horizontally scaled to multiple instances, each instance would track its own counter independently, so a shared store (e.g. Redis) would be needed for a true global limit.
-
----
-
-##  Use Case
-
-This system is useful for:
-- Teachers managing internal marks
-- Academic data processing
-- Data engineering practice (ETL pipelines)
-- Learning backend + dashboard integration
-
----
-
-##  Setup Instructions
-
-###  macOS / Linux
-
-#### 1. Setup Environment
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+```text
+                    ┌─────────────────────┐
+                    │   CSV / Data File   │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │     FastAPI API     │
+                    │   File Ingestion    │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │   Pandas ETL Layer  │
+                    │                     │
+                    │ Schema Validation   │
+                    │ Data Cleaning       │
+                    │ Business Rules      │
+                    │ Duplicate Checks    │
+                    │ Error Handling      │
+                    └──────────┬──────────┘
+                               │
+                  ┌────────────┴────────────┐
+                  │                         │
+                  ▼                         ▼
+        ┌───────────────────┐     ┌───────────────────┐
+        │ Valid Records     │     │ Quarantined Data  │
+        └─────────┬─────────┘     └───────────────────┘
+                  │
+                  ▼
+        ┌───────────────────┐
+        │ Relational DB     │
+        │ Student / Marks   │
+        │ ETL Run Lineage   │
+        └─────────┬─────────┘
+                  │
+                  ▼
+        ┌───────────────────┐
+        │ Streamlit         │
+        │ Analytics         │
+        │ Dashboard         │
+        └───────────────────┘
 ```
 
-#### 2. Initialize Database
-```bash
-python init_db.py
+## Tech Stack
+
+### Backend & API
+- Python
+- FastAPI
+- SQLAlchemy
+- Uvicorn
+
+### Data Engineering & Analytics
+- Pandas
+- NumPy
+- ETL / data validation
+- Data cleaning
+- Data modeling
+- Statistical analysis
+
+### Database
+- MySQL
+
+### Dashboard
+- Streamlit
+
+### Development Tools
+- Git
+- GitHub
+
+## ETL Workflow
+
+The ETL pipeline is the core of the application.
+
+### 1. Extract
+
+The system accepts academic data files and loads the source dataset for processing.
+
+### 2. Validate
+
+The incoming dataset is checked for structural and business-rule issues, including:
+
+- Required columns
+- Data types
+- Missing values
+- Student ID validity
+- Score/marks ranges
+- Date validity
+- Duplicate records
+
+### 3. Quarantine
+
+Invalid records are separated from valid data rather than being discarded.
+
+Each rejected record can be associated with validation/error information, making the pipeline easier to debug and audit.
+
+### 4. Transform
+
+Valid records are cleaned and normalized using Pandas before being prepared for persistence.
+
+### 5. Load
+
+Cleaned records are stored in the database using the application's data model.
+
+### 6. Lineage
+
+ETL execution information is maintained so that individual processing runs can be tracked and reviewed.
+
+## Project Structure
+
+```text
+internal-marking-system/
+│
+├── backend/
+│   ├── app/
+│   │   ├── api/
+│   │   ├── core/
+│   │   ├── db/
+│   │   ├── models/
+│   │   ├── schemas/
+│   │   ├── services/
+│   │   └── main.py
+│   │
+│   └── requirements.txt
+│
+├── dashboard/
+│   └── app.py
+│
+├── data/
+│   └── sample/
+│
+├── tests/
+│
+├── .env.example
+├── .gitignore
+├── README.md
+└── requirements.txt
 ```
 
-#### 3. Start Backend (Terminal 1)
+> The exact folder structure may vary slightly depending on the current repository organization.
+
+## Getting Started
+
+### Prerequisites
+
+Make sure the following are installed:
+
+- Python 3.10+
+- MySQL
+- Git
+
+### 1. Clone the repository
+
 ```bash
-python api.py
-# OR
-uvicorn api:app --host 0.0.0.0 --port 8000 --reload
+git clone https://github.com/<your-username>/internal-marking-system.git
+cd internal-marking-system
 ```
 
-#### 4. Start Frontend (Terminal 2)
-```bash
-source venv/bin/activate
-streamlit run dashboard.py
-```
+### 2. Create a virtual environment
 
-### Windows
+#### Windows
 
-#### 1. Install Python
-
-Make sure Python 3.11+ is installed and added to PATH.
-
-#### 2. Setup Environment
 ```bash
 python -m venv venv
 venv\Scripts\activate
+```
+
+#### macOS / Linux
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### 3. Install dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
-#### 3. Initialize Database
-```bash
-python init_db.py
+If backend and dashboard dependencies are maintained separately, install their respective requirement files as well.
+
+## Environment Variables
+
+Create a `.env` file in the project root and configure the database/application settings required by your local setup.
+
+Example:
+
+```env
+DATABASE_URL=mysql+pymysql://<username>:<password>@localhost:3306/<database_name>
 ```
 
-You should see:
-```
-[DB] SQLite database ready: marking.db
-```
+Do **not** commit `.env` or other files containing secrets to GitHub.
 
-#### 4. Start Backend (Terminal 1)
-```bash
-python api.py
-# OR
-uvicorn api:app --host 0.0.0.0 --port 8000 --reload
-```
+A `.env.example` file should be included in the repository so that other developers know which variables are required.
 
-Backend runs at: `http://localhost:8000`
+## Database Setup
 
-#### 5. Start Frontend (Terminal 2)
-```bash
-venv\Scripts\activate
-streamlit run dashboard.py
+Create the required MySQL database before starting the application.
+
+Example:
+
+```sql
+CREATE DATABASE internal_marking_system;
 ```
 
-Dashboard runs at: `http://localhost:8501`
+Update the connection string in `.env` to match your local MySQL configuration.
 
----
+The application can then initialize/use the required database tables through its SQLAlchemy models and startup/database logic.
 
-## 🔐 Environment Variables
+## Running the Backend
 
-Copy `.env.example` to `.env` for local development (or export the variables in your shell).
-Never commit `.env`; it is intentionally ignored by Git.
-
-> ⚠️ **Never deploy without setting `ETL_API_KEY` and `DASHBOARD_API_KEY` to the same strong random secret.** The application has no hard-coded API-key fallback; it refuses to start the API when `ETL_API_KEY` is missing.
-
-| Variable            | Used by      | Value / default                    | Purpose                                  |
-|---------------------|--------------|--------------------------------------|-------------------------------------------|
-| `ETL_API_KEY`        | api.py    | *(required)*                    | Strong secret required in `X-API-Key` on every endpoint except `/health` |
-| `DASHBOARD_API_KEY`  | dashboard.py | *(required; same as ETL_API_KEY)* | Dashboard-to-API authentication key |
-| `ENVIRONMENT`        | api.py    | `development`                   | Informational environment label; production deployments should use `production` |
-| `MAX_UPLOAD_MB`      | api.py    | `10`                             | Maximum accepted CSV upload size          |
-| `ALLOWED_ORIGINS`    | api.py    | `http://localhost:8501`         | Comma-separated CORS allow-list           |
-| `API_BASE_URL`       | dashboard.py | `http://localhost:8000`      | Where the dashboard finds the API         |
-| `DATABASE_URL`       | api.py, etl_pipeline.py, init_db.py | *(unset)* | PostgreSQL connection string. Unset = SQLite (local dev). Set = Postgres (deployed). |
-
-## ✅ Running Tests
+Start the FastAPI application with:
 
 ```bash
-pytest
+uvicorn backend.app.main:app --reload
 ```
 
-You should see all tests pass, e.g. `23 passed`. Tests always run against a
-temporary SQLite database regardless of `DATABASE_URL` — they don't touch
-Postgres.
+The API will normally be available at:
 
----
+```text
+http://127.0.0.1:8000
+```
 
-## ☁️ Deploying
+FastAPI also provides interactive API documentation:
 
-The plan: **FastAPI → Render**, **PostgreSQL → Supabase**, **Streamlit
-dashboard → Streamlit Community Cloud**, **code → GitHub**. Push this repo
-to GitHub first — all platforms deploy from it.
+```text
+http://127.0.0.1:8000/docs
+```
 
-### 1. Database, on Supabase
+and:
 
-1. Create a project at [supabase.com](https://supabase.com) (free tier is
-   fine to start).
-2. In the project, go to **Settings → Database → Connection string** and
-   copy the **connection pooling** string (not the direct connection) —
-   it looks like
-   `postgresql://postgres.xxxxxxxx:[YOUR-PASSWORD]@aws-0-<region>.pooler.supabase.com:6543/postgres`.
-   Use the pooler URL rather than the direct one: Render's free plan can
-   spin your service down between requests, and the pooler handles the
-   resulting burst of reconnects far better than a direct connection does.
-3. Fill in your database password in place of `[YOUR-PASSWORD]`. Keep this
-   full string handy — it's what you'll paste into `DATABASE_URL` on
-   Render in the next step. `db.py` accepts it as-is (see `db.py` for how
-   the `postgres://` / `postgresql://` prefix is handled automatically).
+```text
+http://127.0.0.1:8000/redoc
+```
 
-### 2. API, on Render
+## Running the Dashboard
 
-The included `render.yaml` defines the web service (a Render "Blueprint"),
-so this is mostly point-and-click:
+Start Streamlit with:
 
-1. In the Render dashboard: **New +** → **Blueprint** → connect this GitHub repo.
-   Render reads `render.yaml` and provisions the web service
-   (`marking-system-api`).
-2. When prompted, set two values `render.yaml` deliberately leaves for you
-   to fill in:
-   - `DATABASE_URL` — the Supabase pooler connection string from step 1.
-   - `ETL_API_KEY` — a long random string. You'll copy this same value to
-     Streamlit Cloud in step 3.
-   `ENVIRONMENT` is already set to `production`, so the API will refuse to
-   start if `ETL_API_KEY` is left at the default — that's intentional.
-3. Deploy. Render runs `python init_db.py` (creates the tables in Supabase
-   — safe to re-run on every future deploy) and then starts the API with
-   `uvicorn api:app --host 0.0.0.0 --port $PORT`.
-4. Once it's live, note the service URL Render gives you
-   (`https://marking-system-api-xxxx.onrender.com` or similar) — check
-   `https://<that-url>/health` returns `{"status":"ok", ..., "db":"PostgreSQL"}`.
+```bash
+streamlit run dashboard/app.py
+```
 
-> **Any Postgres provider works.** Since the app only needs a standard
-> `DATABASE_URL`, Supabase isn't special-cased — Render's own managed
-> Postgres, Neon, or anywhere else would be a drop-in replacement. Supabase
-> is just the one this project is configured for above.
+The dashboard will normally be available at:
 
-### 3. Dashboard, on Streamlit Community Cloud
+```text
+http://localhost:8501
+```
 
-1. In Streamlit Community Cloud: **New app** → point it at this repo,
-   main file path `dashboard.py`.
-2. In the app's **Settings → Secrets**, paste the two values from
-   `.streamlit/secrets.toml.example`, filled in for real:
-   ```toml
-   API_BASE_URL = "https://<your-render-api-url>"
-   DASHBOARD_API_KEY = "<the same ETL_API_KEY you set on Render>"
-   ```
-   (Streamlit Cloud exposes these via `st.secrets`, not as OS environment
-   variables — `dashboard.py` bridges them into `os.environ` at startup,
-   so nothing else needs to change between local and deployed.)
-3. Deploy. Once it's live, go back to the Render service's environment
-   variables and add `ALLOWED_ORIGINS` set to the Streamlit app's URL, so
-   CORS is scoped to it instead of the `localhost:8501` default (this
-   doesn't affect the dashboard-to-API connection either way — see the
-   Security section above — but it's the correct thing to tighten before
-   calling this "deployed").
+## Dashboard
 
-### 4. Everyday redeploys
+The Streamlit dashboard is intended to provide an easy-to-use analytics layer over the processed academic data.
 
-Both platforms auto-deploy on push to the branch you connected, so after
-the first setup, shipping a change is just `git push`.
+Typical dashboard capabilities include:
+
+- Dataset overview
+- Student-level performance analysis
+- Subject/assessment summaries
+- Score distributions
+- Aggregated statistics
+- Data-quality indicators
+- ETL processing information
+- Interactive filtering and exploration
+
+### Live Dashboard
+
+**Dashboard:** `https://<your-streamlit-deployment-url>`
+
+Replace the placeholder above with the deployed Streamlit URL before publishing the repository.
+
+## API
+
+The FastAPI backend exposes endpoints for the application's data and ETL workflow.
+
+Typical API responsibilities include:
+
+- Uploading datasets
+- Triggering/handling ETL processing
+- Accessing student/marks data
+- Retrieving validation results
+- Inspecting ETL run information
+- Serving processed data to the dashboard
+
+Use the interactive Swagger UI at:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+to view the exact endpoints and request/response schemas implemented in the current version.
+
+## Data Quality & Reliability
+
+A major design goal of this system is to avoid treating uploaded academic data as automatically trustworthy.
+
+Instead, the pipeline explicitly validates incoming records and preserves information about invalid data.
+
+This provides several benefits:
+
+- Bad records do not silently enter the database.
+- Validation failures are traceable.
+- ETL runs can be audited.
+- Data-processing issues are easier to diagnose.
+- The resulting analytics are based on controlled, validated data.
+
+## Example Input
+
+A typical input dataset may contain fields such as:
+
+```text
+student_id,student_name,subject,marks,assessment_date
+2026001,Aarav Sharma,DBMS,86,2026-08-01
+2026002,Riya Singh,DBMS,91,2026-08-01
+2026003,Arjun Mehta,DBMS,74,2026-08-01
+```
+
+The exact schema should match the validation rules implemented by the current application.
+
+## Error Handling
+
+The pipeline is designed to distinguish between valid and invalid records.
+
+Examples of possible validation failures:
+
+```text
+Invalid student ID
+Missing required field
+Marks outside permitted range
+Invalid date
+Duplicate record
+Incorrect data type
+```
+
+Rather than removing these rows without explanation, the system can retain them in a quarantine/error flow with associated validation information.
+
+## Deployment
+
+The project can be deployed as separate services:
+
+### Backend
+Deploy the FastAPI service on a platform that supports Python web applications.
+
+### Dashboard
+Deploy the Streamlit application separately and configure it to communicate with the deployed backend.
+
+### Database
+Use a managed MySQL-compatible database for production workloads.
+
+For deployment, make sure:
+
+- Environment variables are configured securely.
+- Database credentials are never committed.
+- CORS is configured appropriately.
+- The backend URL used by the dashboard points to the deployed API.
+- Production services use stable database credentials and connection settings.
+
+## Production Considerations
+
+For a production deployment, consider adding:
+
+- Authentication and authorization
+- Role-based access control
+- Structured application logging
+- Rate limiting
+- API versioning
+- Automated tests and CI/CD
+- Database migrations
+- Monitoring and health checks
+- More granular audit logging
+- Stronger file-size/type validation
+- Object storage for uploaded source files
+- Secure secret management
+
+## Future Improvements
+
+Possible future enhancements include:
+
+- Faculty/admin authentication
+- Role-based dashboards
+- Automated report generation
+- Export to Excel/PDF
+- Student performance forecasting
+- Attendance and marks integration
+- More advanced anomaly detection
+- Email/report notifications
+- Background ETL jobs
+- Containerized deployment with Docker
+- CI/CD automation
+
+## Why This Project?
+
+This project demonstrates practical skills across several areas:
+
+**Backend Development**
+- REST API development with FastAPI
+- Database integration with SQLAlchemy
+- Service-oriented application structure
+
+**Data Engineering**
+- ETL pipeline design
+- Schema and business-rule validation
+- Data cleaning
+- Error quarantine
+- ETL lineage
+
+**Data Analytics**
+- Pandas-based transformation
+- Statistical analysis
+- Interactive dashboard development
+
+**Software Engineering**
+- Modular project architecture
+- Environment-based configuration
+- Git/GitHub workflow
+- Production-oriented thinking
+
+## Author
+
+**Saurabh Tiwari**
+
+Built as an academic data engineering and analytics project combining backend development, ETL, database management, and interactive reporting.
