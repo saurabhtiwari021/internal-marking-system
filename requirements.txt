@@ -1,0 +1,17 @@
+# Internal Marking System — Python Dependencies  (v5)
+# SQLite locally (zero config) / PostgreSQL when deployed — see db.py.
+# No MySQL, no Redis, no Docker required.
+
+pandas==2.2.2
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9
+streamlit==1.35.0
+requests==2.32.3
+python-dotenv==1.0.1
+
+# PostgreSQL driver — only imported at runtime if DATABASE_URL is set
+# (see db.py), but installed unconditionally since Render sets it in
+# production.
+psycopg[binary]==3.2.6
+pytest==8.2.2

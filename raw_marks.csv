@@ -1,0 +1,9 @@
+student_id,name,subject,score,exam_date
+S001,Alice Smith,Mathematics,85,2023-10-01
+S002,Bob Jones,Physics,92,2023-10-02
+S003,Charlie Brown,Chemistry,78,2023-10-01
+S004,,Mathematics,90,2023-10-01
+S005,Eve Davis,Physics,105,2023-10-02
+S006,Frank White,Chemistry,B+,2023-10-01
+S007,Grace Hopper,Computer Science,99,2023-10-03
+S008,Heisenberg,Physics,88,2027-01-01
