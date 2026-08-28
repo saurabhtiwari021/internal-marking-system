@@ -45,7 +45,7 @@ AUTH_HEADERS = {"X-API-Key": API_KEY}   # every GET below requires this too
 
 def fetch_analytics() -> dict | None:
     try:
-        r = requests.get(f"{API_BASE}/analytics", headers=AUTH_HEADERS, timeout=10)
+        r = requests.get(f"{API_BASE}/analytics", headers=AUTH_HEADERS, timeout=60)
         r.raise_for_status()
         return r.json()
     except requests.exceptions.ConnectionError:
@@ -62,7 +62,7 @@ def fetch_analytics() -> dict | None:
 def fetch_json(path: str) -> list[dict]:
     """Fetch a list-of-records endpoint (/records, /quarantine, /etl-runs)."""
     try:
-        r = requests.get(f"{API_BASE}{path}", headers=AUTH_HEADERS, timeout=10)
+        r = requests.get(f"{API_BASE}{path}", headers=AUTH_HEADERS, timeout=60)
         r.raise_for_status()
         body = r.json()
         return body.get("records") or body.get("runs") or []
